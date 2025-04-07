@@ -32,7 +32,7 @@ sequenceDiagram
     enduser->>signservice: Signs the document
     signservice->>enduser: Redirects back to yourservice with URI state included
     enduser->>yourservice: Visit callback URL with state
-    yourservice->>yourservice: Verifies and and extracts state (user-id) 
+    yourservice->>yourservice: Verifies and extracts state (user-id) 
     yourservice->>persistentDB: Marks that user-id has signed the PDF
     yourservice->>enduser: Present welcome page
 ```
@@ -40,7 +40,7 @@ sequenceDiagram
 ## Installation
 
 ```
-com.github.ivarref/tamperproof-uri-state {:git/sha "7118e6e540f52744ff615dcc7c25aa57b23fb933"}
+com.github.ivarref/tamperproof-uri-state {:git/sha "448b84a5d8ae79055b385d08ad568a4f55435b47"}
 ```
 
 ## Usage
@@ -98,7 +98,7 @@ Arguments for `unsign` function:
 
 ### Details
 
-`sign` and `unsign` uses `HmacSHA256` for generating a signature/hash.
+`sign` and `unsign` use `HmacSHA256` for generating a signature/hash.
 This, combined with the custom encoding, yields a smaller amount of bytes than using a regular JWT would.
 An external system/user can view the contents of the state, but cannot verify its authenticity.
 There is not public key here. This means that the recipient of the signed/hashed state should be the same service
