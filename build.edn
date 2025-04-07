@@ -1,0 +1,12 @@
+{:lib com.github.sikt-no/clj-jwt
+
+ :version "0.1.{{git/commit-count}}"
+
+ :github-actions? true
+
+ :scm {:connection "scm:git:git://github.com/ivarref/tamper-safe-uri-state.git"
+       :developerConnection "scm:git:ssh://git@github.com/ivarref/tamper-safe-uri-state.git"
+       :url "https://github.com/ivarref/tamper-safe-uri-state"}
+
+ :licenses [{:name "Eclipse Public License - v 2.0"
+             :url "https://www.eclipse.org/legal/epl-2.0/"}]}
