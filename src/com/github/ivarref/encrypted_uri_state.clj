@@ -1,8 +1,8 @@
 (ns com.github.ivarref.encrypted-uri-state
   (:import (java.io ByteArrayInputStream ByteArrayOutputStream InputStream)
            (java.nio.charset StandardCharsets)
-           (java.security Key KeyFactory SecureRandom)
-           (java.security.spec AlgorithmParameterSpec PKCS8EncodedKeySpec)
+           (java.security Key SecureRandom)
+           (java.security.spec AlgorithmParameterSpec)
            (java.util Base64)
            (javax.crypto Cipher SecretKeyFactory)
            (javax.crypto.spec GCMParameterSpec PBEKeySpec SecretKeySpec)))
@@ -27,32 +27,8 @@
         secret-key (SecretKeySpec. (.getEncoded (.generateSecret secret-key-factory key-spec)) "AES")]
     secret-key))
 
-(defn create-private-key [private-key-bytes]
-  (let [key-factory (KeyFactory/getInstance "EC")
-        private-key-spec (PKCS8EncodedKeySpec. private-key-bytes)]
-    (.generatePrivate key-factory private-key-spec)))
-
-(defn get-key-from-pkcs8 [pkcs8-string]
-  (let [private-key-content (-> (slurp "ec256.pem")
-                                (.replace "-----BEGIN PRIVATE KEY-----" "")
-                                (.replace "-----END PRIVATE KEY-----" "")
-                                (.replace "\n" ""))]
-    (.decode (Base64/getDecoder) private-key-content)))
-
 
 (defn- generate-iv-bytes []
-  #_(byte-array [(byte 1)
-                 (byte 2)
-                 (byte 3)
-                 (byte 4)
-                 (byte 5)
-                 (byte 6)
-                 (byte 7)
-                 (byte 8)
-                 (byte 9)
-                 (byte 10)
-                 (byte 11)
-                 (byte 12)])
   (let [iv (byte-array 12)]
     (.nextBytes (SecureRandom.) iv)
     iv))
@@ -73,22 +49,31 @@
     (assert (>= num-of-bytes 1))
     (let [exp-epoch-seconds-encoded (concat-byte-arrays [(byte-array [(byte num-of-bytes)])
                                                          number-byte-array])]
-      (print-bytes exp-epoch-seconds-encoded)
       exp-epoch-seconds-encoded)))
 
-(defn encrypt [secret-key exp-epoch-seconds plaintext]
-  (assert (instance? Key secret-key))
-  (assert (number? exp-epoch-seconds))
-  (assert (string? plaintext))
-  (let [exp-epoch-seconds (long exp-epoch-seconds)
-        iv-bytes (generate-iv-bytes)
-        iv (GCMParameterSpec. 128 iv-bytes)
-        cipher (Cipher/getInstance cipher-type)
-        _ (.init cipher Cipher/ENCRYPT_MODE ^Key secret-key ^AlgorithmParameterSpec iv)
-        cipher-text-bytes (.doFinal cipher (concat-byte-arrays [(encode-epoch-seconds exp-epoch-seconds) (str-bytes plaintext)]))
-        cipher-bytes (concat-byte-arrays [iv-bytes cipher-text-bytes])]
-    (.encodeToString (Base64/getUrlEncoder) cipher-bytes)))
+(defn- get-secret-key [secret-key]
+  (cond (and (vector? secret-key)
+             (= 2 (count secret-key)))
+    (get-key-from-password (first secret-key) (second secret-key))
+    (instance? Key secret-key)
+    secret-key
 
+    :else
+    (throw (IllegalArgumentException. "Cannot make use of secret-key"))))
+
+(defn encrypt [secret-key exp-epoch-seconds plaintext]
+  (let [secret-key (get-secret-key secret-key)]
+    (assert (instance? Key secret-key))
+    (assert (number? exp-epoch-seconds))
+    (assert (string? plaintext))
+    (let [exp-epoch-seconds (long exp-epoch-seconds)
+          iv-bytes (generate-iv-bytes)
+          iv (GCMParameterSpec. 128 iv-bytes)
+          cipher (Cipher/getInstance cipher-type)
+          _ (.init cipher Cipher/ENCRYPT_MODE ^Key secret-key ^AlgorithmParameterSpec iv)
+          cipher-text-bytes (.doFinal cipher (concat-byte-arrays [(encode-epoch-seconds exp-epoch-seconds) (str-bytes plaintext)]))
+          cipher-bytes (concat-byte-arrays [iv-bytes cipher-text-bytes])]
+      (.encodeToString (Base64/getUrlEncoder) cipher-bytes))))
 
 (defn read-n-bytes [^InputStream bais n]
   (with-open [baos (ByteArrayOutputStream.)]
@@ -141,15 +126,6 @@
       (let [exp-epoch-seconds-len (byte (.read ^ByteArrayInputStream bais))]
         (println "decode exp-epoch-seconds-len:" exp-epoch-seconds-len)))))
 
-(defn decrypt [secret-key encrypted-bytes]
-  (assert (instance? SecretKeySpec secret-key))
-  (assert (bytes? encrypted-bytes))
-  (let [cipher (Cipher/getInstance cipher-type)
-        [iv-bytes encrypted-bytes-without-iv] (split-bytes-at encrypted-bytes 12)
-        _ (.init cipher Cipher/DECRYPT_MODE ^Key secret-key (GCMParameterSpec. 128 iv-bytes))
-        decrypted-bytes (.doFinal cipher encrypted-bytes-without-iv)]
-    decrypted-bytes))
-
 (defn- decrypted-bytes->exp [decrypted-bytes]
   (assert (bytes? decrypted-bytes))
   (let [exp-len (aget #^bytes decrypted-bytes 0)]
@@ -164,28 +140,39 @@
     (assert (pos-int? exp-len))
     (String. #^bytes (skip-n-bytes decrypted-bytes (+ exp-len 1)) StandardCharsets/UTF_8)))
 
-(try
-  (do
-    (let [plaintext "omg-zoooomgw000tkebbelife"
-          secret-key (get-key-from-password "my-key" "my-salt")]
-      ;(println (encrypt secret-key plaintext))
-      ;(println (encrypt secret-key plaintext))
-      (let [enc (encrypt secret-key (/ (System/currentTimeMillis) 1000) plaintext)]
-        (println enc "len:" (count enc)))
-      #_(println (encrypt-str secret-key 3600 plaintext))
-      #_(let [all-str (encrypt secret-key (/ (System/currentTimeMillis) 1000) "my-state")
-              all-bytes (.decode (Base64/getUrlDecoder) ^String all-str)
-              decrypted-bytes (decrypt secret-key all-bytes)]
-          (print-bytes decrypted-bytes)
-          (println (decrypted-bytes->exp decrypted-bytes))
-          (println (long (/ (System/currentTimeMillis) 1000)))
-          (println (decrypted-bytes->state decrypted-bytes))
-          ;(print-bytes (skip-n-bytes encrypted-bytes 1))
-          ;(print-bytes (skip-n-bytes encrypted-bytes 12))
-          #_(get-cipher-bytes all-str))
-      #_(println "janei:")
-      #_(println (alength (.toByteArray (BigInteger. (str Long/MAX_VALUE) 10))))))
+(defn- decrypt-to-bytes [secret-key now-epoch-seconds encrypted-str-b64]
+  (assert (instance? SecretKeySpec (get-secret-key secret-key)))
+  (assert (string? encrypted-str-b64))
+  (let [encrypted-bytes (.decode (Base64/getUrlDecoder) ^String encrypted-str-b64)
+        cipher (Cipher/getInstance cipher-type)
+        [iv-bytes encrypted-bytes-without-iv] (split-bytes-at encrypted-bytes 12)
+        _ (.init cipher Cipher/DECRYPT_MODE ^Key secret-key (GCMParameterSpec. 128 iv-bytes))
+        decrypted-bytes (.doFinal cipher encrypted-bytes-without-iv)]
+    decrypted-bytes))
 
-  (catch Exception e
-    (println "Error:" (ex-message e))
-    (throw e)))
+#_(try
+    (do
+      (let [plaintext "omg-zoooomgw000tkebbelife"
+            secret-key (get-key-from-password "my-key" "my-salt")]
+        ;(println (encrypt secret-key plaintext))
+        ;(println (encrypt secret-key plaintext))
+        (let [enc (encrypt secret-key 0 plaintext)]
+          (println enc "len:" (count enc)))
+        (decrypt secret-key 0 "BwlUA05OhtjOg-VK-IKkQx7ZNn7sJHZncjrWH3A0586hkxC2r1l-mutEyyYWZYZsEWo2GMAEIZea1A==")
+        #_(println (encrypt-str secret-key 3600 plaintext))
+        #_(let [all-str (encrypt secret-key (/ (System/currentTimeMillis) 1000) "my-state")
+                all-bytes (.decode (Base64/getUrlDecoder) ^String all-str)
+                decrypted-bytes (decrypt secret-key all-bytes)]
+            (print-bytes decrypted-bytes)
+            (println (decrypted-bytes->exp decrypted-bytes))
+            (println (long (/ (System/currentTimeMillis) 1000)))
+            (println (decrypted-bytes->state decrypted-bytes))
+            ;(print-bytes (skip-n-bytes encrypted-bytes 1))
+            ;(print-bytes (skip-n-bytes encrypted-bytes 12))
+            #_(get-cipher-bytes all-str))
+        #_(println "janei:")
+        #_(println (alength (.toByteArray (BigInteger. (str Long/MAX_VALUE) 10))))))
+
+    (catch Exception e
+      (println "Error:" (ex-message e))
+      (throw e)))
