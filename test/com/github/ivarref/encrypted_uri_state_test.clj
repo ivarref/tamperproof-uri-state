@@ -44,9 +44,13 @@
 
 (theme/banner! "Running tests")
 
-(defn d [prefix x]
-  (println prefix x)
-  x)
+(defn d
+  ([x]
+   (println ">>" x)
+   x)
+  ([prefix x]
+   (println prefix x)
+   x))
 
 (defn- generate-iv-bytes-mock []
   (byte-array [(byte 1)
@@ -82,23 +86,20 @@
 
 (def encrypted-2 "DAsKCQgHBgUEAwIBYB_uNgCNyB-0F1c9F0lgcXffanWSfU7EvEEOqIPgNdlCDicJpj4bxuGHqfqcMY0=")
 
-(t/deftest ^:ignore basics
+(t/deftest basics
   (with-redefs [eus/generate-iv-bytes generate-iv-bytes-mock]
-    (t/is (= "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="
-             (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))))
+    (t/is (= "AQIDBAUGBwgJCgsMcvZ_OOVShfgvprn6xR_zULt2hnyPstjqlOgsoke-x1_Lg5YzUH1RPj2LBjC9g7E="
+             (eus/encrypt "my-key" 1 "my-super-duper-great-message\n"))))
   (with-redefs [eus/generate-iv-bytes generate-iv-bytes-mock-2]
-    (t/is (= encrypted-2
-             (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))))
-  (t/is (= [1 "my-super-duper-great-message\n"]
-          (decrypt-to-vec secret-key encrypted-2)))
-  (t/is (= {:expired? false
-            :state "my-super-duper-great-message\n"}
-           (eus/decrypt-to-map secret-key 1 encrypted-2)))
-  (t/is (= true
-           (:expired? (eus/decrypt-to-map secret-key 2 encrypted-2))))
-  (t/is (= {:expired? true
-            :state nil}
-           (eus/decrypt-to-map secret-key 2 encrypted-2))))
+    (t/is (= "DAsKCQgHBgUEAwIBg3KDvKmwnmgTbJXeirTTYGI9mnJO7-cbFDLgfZnPkM7-Bq9HjC_xDWMY1cjZimA="
+             (eus/encrypt "my-key" 1 "my-super-duper-great-message\n"))))
+  (t/is (= [1 "my-super-duper-great-message\n" nil]
+          (decrypt-to-vec "my-key" "DAsKCQgHBgUEAwIBg3KDvKmwnmgTbJXeirTTYGI9mnJO7-cbFDLgfZnPkM7-Bq9HjC_xDWMY1cjZimA=")))
+  (t/is (= [2 "my-super-duper-great-message\n" nil]
+           (decrypt-to-vec "my-key" (eus/encrypt "my-key" 2 "my-super-duper-great-message\n"))))
+  (let [now-epoch (long (/ (System/currentTimeMillis) 1000))]
+    (t/is (= [now-epoch "my-super-duper-great-message\n" nil]
+           (decrypt-to-vec "my-key" (eus/encrypt "my-key" now-epoch "my-super-duper-great-message\n"))))))
 
 (t/deftest error-handling-argument-types-decrypt
   #_(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2)))
@@ -123,6 +124,8 @@
 
     (t/is (= "message" (:state (eus/decrypt-to-map "my-key" 1 enc-1))))
     (t/is (= "message" (:state (eus/decrypt-to-map "my-key" 1 enc-2))))
+    (t/is (= false (:expired? (eus/decrypt-to-map "my-key" 1 enc-2))))
+    (t/is (= false (:error? (eus/decrypt-to-map "my-key" 1 enc-2))))
 
     (t/is (= false (:expired? (eus/decrypt-to-map "my-key" 1 enc-2))))
     (t/is (= true (:expired? (eus/decrypt-to-map "my-key" 2 enc-2))))
