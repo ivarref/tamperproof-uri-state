@@ -6,6 +6,41 @@
 
 (pretty/install-pretty-exceptions)
 
+(def default-frame-rules
+  "The set of rules that forms the default for [[*default-frame-rules*]], and the
+  basis for [[*default-frame-filter*]], as a vector of vectors.
+
+ Each rule is a vector of three values:
+
+ * A function that extracts the value from the stack frame map (typically, this is a keyword such
+ as :package or :name). The value is converted to a string.
+ * A string or regexp used for matching.  Strings must match exactly.
+ * A resulting frame visibility (:hide, :omit, :terminate, or :show).
+
+ The default rules:
+
+ * omit everything in `clojure.lang`, `java.lang.reflect`, and the function `clojure.core/apply`
+ * hide everything in `sun.reflect`
+ * terminate at `speclj.*`, `clojure.main/main*`, `clojure.main/repl/read-eval-print`, or `nrepl.middleware.interruptible-eval`
+ "
+  [[:package "clojure.lang" :omit]
+   [:package #"sun\.reflect.*" :hide]
+   [:package "java.lang.reflect" :omit]
+   [:name #"speclj\..*" :terminate]
+   [:name "clojure.core/apply" :omit]
+   [:name #"clojure.*" :omit]
+   [:package #"java.*" :omit]
+   [:name #"cognitect\.test.*" :omit]
+   [:name #"nrepl\.middleware\.interruptible-eval/.*" :terminate]
+   [:name #"clojure\.main/repl/read-eval-print.*" :terminate]
+   [:name #"clojure\.main/main.*" :terminate]])
+
+(defn short-stacktrace [f]
+  (binding [clj-commons.format.exceptions/*default-frame-rules* default-frame-rules]
+    (f)))
+
+(t/use-fixtures :each short-stacktrace)
+
 (theme/banner! "Running tests")
 
 (defn d [prefix x]
@@ -63,6 +98,14 @@
   (t/is (= {:expired? true
             :state nil}
            (eus/decrypt-to-map secret-key 2 encrypted-2))))
+
+(t/deftest error-handling-argument-types-decrypt
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key nil encrypted-2)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 nil)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 "")))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 ".åååasdf.asdf.asdfasdfasdf./asdfasdf/"))))
+
 #_(t/deftest unsign-to-map-test
     (let [state "my-super-duper-great-message\n"
           signed (tus/sign "my-key" 1 state)]

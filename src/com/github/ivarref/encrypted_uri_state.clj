@@ -151,11 +151,19 @@
       [(decrypted-bytes->exp decrypted-bytes)
        (decrypted-bytes->state decrypted-bytes)])))
 
-(defn decrypt-to-map [secret-key epoch-seconds-now encrypted-str-b64]
-  (assert (string? encrypted-str-b64))
+(defn decrypt-to-map [secret-key epoch-seconds-now encrypted-str-b64-url]
+  (when-not (number? epoch-seconds-now)
+    (throw (IllegalArgumentException. "epoch-seconds-now must be a number")))
+  (when-not (string? encrypted-str-b64-url)
+    (throw (IllegalArgumentException. "encrypted-str-b64-url must be a string")))
+  (let [bytes (.decode (Base64/getUrlDecoder) ^String encrypted-str-b64-url)]
+    (when (< (alength bytes) 13)
+      (throw (IllegalArgumentException. "encrypted-str-b64-url must be at least 13 bytes"))))
+
+  (assert (string? encrypted-str-b64-url))
   (assert (number? epoch-seconds-now))
   (let [epoch-seconds-now (long epoch-seconds-now)
-        [expiry state] (decrypt-to-vec secret-key encrypted-str-b64)
+        [expiry state] (decrypt-to-vec secret-key encrypted-str-b64-url)
         expired? (> epoch-seconds-now expiry)]
     (if expired?
       {:expired? true :state nil}
