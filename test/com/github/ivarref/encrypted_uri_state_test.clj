@@ -116,11 +116,9 @@
                              (byte 11)
                              (byte 12)]))))
 
-(def secret-key ["my-key" "my-salt"])
-
 (def decrypt-to-vec (resolve 'com.github.ivarref.encrypted-uri-state/decrypt-to-vec))
 
-(def encrypted-2 "DAsKCQgHBgUEAwIBYB_uNgCNyB-0F1c9F0lgcXffanWSfU7EvEEOqIPgNdlCDicJpj4bxuGHqfqcMY0=")
+(def encrypted-sample (eus/encrypt "my-key" 1 "message"))
 
 (t/deftest basics
   (with-redefs [eus/generate-iv-bytes generate-iv-bytes-mock]
@@ -138,11 +136,10 @@
            (decrypt-to-vec "my-key" (eus/encrypt "my-key" now-epoch "my-super-duper-great-message\n"))))))
 
 (t/deftest error-handling-argument-types-decrypt
-  #_(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2)))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" nil encrypted-2)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" nil encrypted-sample)))
   (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" 1 nil)))
   (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" 1 123)))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2))))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-sample))))
 
 (defn- print-str-bytes [byts]
   (let [byts (.decode (Base64/getUrlDecoder) ^String byts)]
@@ -166,19 +163,4 @@
     (t/is (= true (:expired? (eus/decrypt-to-map "my-key" 2 enc-2))))
     (t/is (= true (:error? (eus/decrypt-to-map "my-key" 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
     (t/is (= true (:error? (eus/decrypt-to-map "my-key" 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmihXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
-    #_(let [seen (atom #{})]
-        (dotimes [x 10]
-          (let [encrypted (eus/encrypt secret-key 1 "message")]
-               (println (:error-message (eus/decrypt-to-map ["1" "2"] 1 encrypted))))))))
-  ;(t/is (= "my-super-duper-great-message\n" (:state (eus/decrypt-to-map secret-key 1 (eus/encrypt secret-key 1 "my-super-duper-great-message\n")))))
-  ;(print-str-bytes (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))
-  ;(print-str-bytes (eus/encrypt secret-key 1 "my-super-duper-great-message\n")))
-
-#_(t/deftest unsign-to-map-test
-    (let [state "my-super-duper-great-message\n"
-          signed (tus/sign "my-key" 1 state)]
-
-      (t/is (= {:tampered? false :expired? false :state state} (tus/unsign-to-map "my-key" 1 signed)))
-      (t/is (= {:tampered? false :expired? true :state nil} (tus/unsign-to-map "my-key" 2 signed)))
-      (t/is (= {:tampered? true :expired? false :state nil} (tus/unsign-to-map "my-kyz" 1 signed)))
-      (t/is (= {:tampered? true :expired? true :state nil} (tus/unsign-to-map "my-kyz" 2 signed)))))
+    (t/is (= false (:expired? (eus/decrypt-to-map "my-key" 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmihXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))))
