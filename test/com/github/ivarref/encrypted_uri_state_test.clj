@@ -116,22 +116,18 @@
   (println "")
   (flush))
 
-
-(defn decrypt [ky now-epoch-seconds encrypted]
-  (:state (eus/decrypt-to-map ky now-epoch-seconds encrypted)))
-
 (t/deftest round-trip-happy-case
-  (let [enc-1 (eus/encrypt secret-key 1 "message")
-        enc-2 (eus/encrypt secret-key 1 "message")]
+  (let [enc-1 (eus/encrypt "my-key" 1 "message")
+        enc-2 (eus/encrypt "my-key" 1 "message")]
     (t/is (not= enc-1 enc-2))
 
-    (t/is (= "message" (:state (eus/decrypt-to-map secret-key 1 enc-1))))
-    (t/is (= "message" (:state (eus/decrypt-to-map secret-key 1 enc-2))))
+    (t/is (= "message" (:state (eus/decrypt-to-map "my-key" 1 enc-1))))
+    (t/is (= "message" (:state (eus/decrypt-to-map "my-key" 1 enc-2))))
 
-    (t/is (= false (:expired? (eus/decrypt-to-map secret-key 1 enc-2))))
-    (t/is (= true (:expired? (eus/decrypt-to-map secret-key 2 enc-2))))
-    (t/is (= true (:error? (eus/decrypt-to-map secret-key 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
-    (t/is (= true (:error? (eus/decrypt-to-map secret-key 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmihXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
+    (t/is (= false (:expired? (eus/decrypt-to-map "my-key" 1 enc-2))))
+    (t/is (= true (:expired? (eus/decrypt-to-map "my-key" 2 enc-2))))
+    (t/is (= true (:error? (eus/decrypt-to-map "my-key" 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
+    (t/is (= true (:error? (eus/decrypt-to-map "my-key" 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmihXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
     #_(let [seen (atom #{})]
         (dotimes [x 10]
           (let [encrypted (eus/encrypt secret-key 1 "message")]

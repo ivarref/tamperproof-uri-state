@@ -162,5 +162,5 @@
       {:expired? false :state nil :error? true :error-message error}
       (let [expired? (> epoch-seconds-now expiry)]
         (if expired?
-          {:expired? true :state nil}
-          {:expired? false :state state})))))
+          {:expired? true :state nil :error? false :error-message nil}
+          {:expired? false :state state :error? false :error-message nil})))))
