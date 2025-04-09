@@ -1,9 +1,17 @@
 (ns com.github.ivarref.encrypted-uri-state-test
   (:require [clj-commons.pretty.repl :as pretty]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :as t]
             [com.github.ivarref.encrypted-uri-state :as eus]
             [theme :as theme])
-  (:import (java.util Base64)))
+  (:import (java.io File)
+           (java.util Base64)))
+
+(def is-intellij
+  (or
+    (= "true" (str/lower-case (or (System/getenv "IS_INTELLIJ") "false")))
+    (= "true" (str/lower-case (System/getProperty "clj-commons.ansi.intellij" "false")))))
 
 (pretty/install-pretty-exceptions)
 
@@ -36,9 +44,37 @@
    [:name #"clojure\.main/repl/read-eval-print.*" :terminate]
    [:name #"clojure\.main/main.*" :terminate]])
 
+(defn- clojure-name-to-file [file-str line]
+  (reduce (fn [_ v]
+            (when (and
+                    (.isFile ^File v)
+                    (= (.getName ^File v) file-str))
+              (reduced (str " file://" (.getAbsolutePath ^File v)
+                            ":"
+                            line))))
+          nil
+          (file-seq (io/file "test"))))
+
+(defn new-testing-vars-str
+  [m]
+  (let [{:keys [file line]} m]
+    (str
+      ;; Uncomment to include namespace in failure report:
+      ;;(ns-name (:ns (meta (first *testing-vars*)))) "/ "
+      (reverse (map #(:name (meta %)) t/*testing-vars*))
+      (or
+        (clojure-name-to-file file line)
+        (str " " file ":" line "")))))
+
 (defn short-stacktrace [f]
-  (binding [clj-commons.format.exceptions/*default-frame-rules* default-frame-rules]
-    (f)))
+  (let [org-val t/testing-vars-str]
+    (try
+      (when is-intellij
+        (alter-var-root #'t/testing-vars-str (constantly new-testing-vars-str)))
+      (binding [clj-commons.format.exceptions/*default-frame-rules* default-frame-rules]
+        (f))
+      (finally
+        (alter-var-root #'t/testing-vars-str (constantly org-val))))))
 
 (t/use-fixtures :each short-stacktrace)
 
@@ -103,11 +139,10 @@
 
 (t/deftest error-handling-argument-types-decrypt
   #_(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2)))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key nil encrypted-2)))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 nil)))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 123))))
-  ;(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 "")))
-  ;(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 ".åååasdf.asdf.asdfasdfasdf./asdfasdf/"))))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" nil encrypted-2)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" 1 nil)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map "my-key" 1 123)))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2))))
 
 (defn- print-str-bytes [byts]
   (let [byts (.decode (Base64/getUrlDecoder) ^String byts)]

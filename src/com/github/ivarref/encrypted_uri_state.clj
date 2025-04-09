@@ -151,6 +151,7 @@
     (throw (IllegalArgumentException. "epoch-seconds-now must be a number")))
   (when-not (string? encrypted-str-b64-url)
     (throw (IllegalArgumentException. "encrypted-str-b64-url must be a string")))
+  (get-secret-key secret-key) ; Trigger IllegalArgumentException
   (assert (string? encrypted-str-b64-url))
   (assert (number? epoch-seconds-now))
   (let [epoch-seconds-now (long epoch-seconds-now)
