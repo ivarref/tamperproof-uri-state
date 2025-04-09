@@ -1,5 +1,5 @@
 (ns com.github.ivarref.encrypted-uri-state
-  (:import (java.io ByteArrayInputStream ByteArrayOutputStream File InputStream)
+  (:import (java.io ByteArrayInputStream ByteArrayOutputStream InputStream)
            (java.nio.charset StandardCharsets)
            (java.security Key SecureRandom)
            (java.security.spec AlgorithmParameterSpec)
