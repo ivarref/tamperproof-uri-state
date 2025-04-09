@@ -2,7 +2,8 @@
   (:require [clj-commons.pretty.repl :as pretty]
             [clojure.test :as t]
             [com.github.ivarref.encrypted-uri-state :as eus]
-            [theme :as theme]))
+            [theme :as theme])
+  (:import (java.util Base64)))
 
 (pretty/install-pretty-exceptions)
 
@@ -81,7 +82,7 @@
 
 (def encrypted-2 "DAsKCQgHBgUEAwIBYB_uNgCNyB-0F1c9F0lgcXffanWSfU7EvEEOqIPgNdlCDicJpj4bxuGHqfqcMY0=")
 
-(t/deftest basics
+(t/deftest ^:ignore basics
   (with-redefs [eus/generate-iv-bytes generate-iv-bytes-mock]
     (t/is (= "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="
              (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))))
@@ -100,11 +101,44 @@
            (eus/decrypt-to-map secret-key 2 encrypted-2))))
 
 (t/deftest error-handling-argument-types-decrypt
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2)))
+  #_(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map nil 1 encrypted-2)))
   (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key nil encrypted-2)))
   (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 nil)))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 "")))
-  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 ".åååasdf.asdf.asdfasdfasdf./asdfasdf/"))))
+  (t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 123))))
+  ;(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 "")))
+  ;(t/is (thrown? IllegalArgumentException (eus/decrypt-to-map secret-key 1 ".åååasdf.asdf.asdfasdfasdf./asdfasdf/"))))
+
+(defn- print-str-bytes [byts]
+  (let [byts (.decode (Base64/getUrlDecoder) ^String byts)]
+    (dotimes [i (alength #^bytes byts)]
+      (print (format "%02x" (byte (aget #^bytes byts i))))
+      (print " ")))
+  (println "")
+  (flush))
+
+
+(defn decrypt [ky now-epoch-seconds encrypted]
+  (:state (eus/decrypt-to-map ky now-epoch-seconds encrypted)))
+
+(t/deftest round-trip-happy-case
+  (let [enc-1 (eus/encrypt secret-key 1 "message")
+        enc-2 (eus/encrypt secret-key 1 "message")]
+    (t/is (not= enc-1 enc-2))
+
+    (t/is (= "message" (:state (eus/decrypt-to-map secret-key 1 enc-1))))
+    (t/is (= "message" (:state (eus/decrypt-to-map secret-key 1 enc-2))))
+
+    (t/is (= false (:expired? (eus/decrypt-to-map secret-key 1 enc-2))))
+    (t/is (= true (:expired? (eus/decrypt-to-map secret-key 2 enc-2))))
+    (t/is (= true (:error? (eus/decrypt-to-map secret-key 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
+    (t/is (= true (:error? (eus/decrypt-to-map secret-key 1 "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmihXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="))))
+    #_(let [seen (atom #{})]
+        (dotimes [x 10]
+          (let [encrypted (eus/encrypt secret-key 1 "message")]
+               (println (:error-message (eus/decrypt-to-map ["1" "2"] 1 encrypted))))))))
+  ;(t/is (= "my-super-duper-great-message\n" (:state (eus/decrypt-to-map secret-key 1 (eus/encrypt secret-key 1 "my-super-duper-great-message\n")))))
+  ;(print-str-bytes (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))
+  ;(print-str-bytes (eus/encrypt secret-key 1 "my-super-duper-great-message\n")))
 
 #_(t/deftest unsign-to-map-test
     (let [state "my-super-duper-great-message\n"

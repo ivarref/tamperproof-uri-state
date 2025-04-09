@@ -8,7 +8,8 @@
                        :main-opts   ["-m" "cognitect.test-runner"]
                        :exec-fn     cognitect.test-runner.api/test
                        :jvm-opts    ["-Dclj-commons.ansi.enabled=true"
-                                     "-Dclj-commons.ansi.intellij=true"]}
+                                     "-Dclj-commons.ansi.intellij=true"
+                                     "-Dencrypted_uri_state.warn.on.reflection=true"]}
            :dev-watch {:extra-paths ["test" "dev"]
                        :extra-deps  {io.github.tonsky/clj-reload {:mvn/version "0.9.0"}
                                      ;org.slf4j/slf4j-nop         {:mvn/version "2.0.17"}
