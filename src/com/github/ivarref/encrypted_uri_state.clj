@@ -1,5 +1,5 @@
 (ns com.github.ivarref.encrypted-uri-state
-  (:import (java.io ByteArrayInputStream ByteArrayOutputStream InputStream)
+  (:import (java.io ByteArrayOutputStream)
            (java.nio.charset StandardCharsets)
            (java.security Key SecureRandom)
            (java.security.spec AlgorithmParameterSpec)
@@ -19,19 +19,36 @@
     (.nextBytes (SecureRandom.) iv)
     iv))
 
-(defn- get-key-from-password-and-salt [password salt]
-  (let [secret-key-factory (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
-        key-spec (PBEKeySpec. (.toCharArray ^String password) (str-bytes salt) 600000 256) ; https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2
-        secret-key (SecretKeySpec. (.getEncoded (.generateSecret secret-key-factory key-spec)) "AES")]
-    secret-key))
-
-(defn- get-key-from-salt [salt]
-  (let [secret-key-factory (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
-        key-spec (PBEKeySpec. nil (str-bytes salt) 600000 256) ; https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2
-        secret-key (SecretKeySpec. (.getEncoded (.generateSecret secret-key-factory key-spec)) "AES")]
-    secret-key))
-
+(def keyfactory-type "PBKDF2WithHmacSHA256")
+(def key-bits 256)
 (def cipher-type "AES/GCM/Nopadding")
+
+(defn- get-key-from-password-and-salt [password salt]
+  (let [secret-key-factory (SecretKeyFactory/getInstance keyfactory-type)
+        key-spec (PBEKeySpec. (.toCharArray ^String password) (str-bytes salt) 600000 key-bits) ; https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2
+        secret-key (SecretKeySpec. (.getEncoded (.generateSecret secret-key-factory key-spec)) "AES")]
+    secret-key))
+
+(defn- get-key-from-password [password]
+  (let [secret-key-factory (SecretKeyFactory/getInstance keyfactory-type)
+        key-spec (PBEKeySpec. nil (str-bytes password) 600000 key-bits) ; https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2
+        secret-key (SecretKeySpec. (.getEncoded (.generateSecret secret-key-factory key-spec)) "AES")]
+    secret-key))
+
+(defn get-secret-key [secret-key]
+  (cond
+    (instance? SecretKeySpec secret-key)
+    secret-key
+
+    (and (vector? secret-key)
+         (= 2 (count secret-key)))
+    (get-key-from-password-and-salt (first secret-key) (second secret-key))
+
+    (string? secret-key)
+    (get-key-from-password secret-key)
+
+    :else
+    (throw (IllegalArgumentException. (str "get-secret-key cannot handle secret-key of type " (type secret-key))))))
 
 (defn- concat-byte-arrays [vec-of-arrays]
   (assert (vector? vec-of-arrays))
@@ -50,21 +67,6 @@
                                                          number-byte-array])]
       exp-epoch-seconds-encoded)))
 
-(defn get-secret-key [secret-key]
-  (cond
-    (instance? SecretKeySpec secret-key)
-    secret-key
-
-    (and (vector? secret-key)
-         (= 2 (count secret-key)))
-    (get-key-from-password-and-salt (first secret-key) (second secret-key))
-
-    (string? secret-key)
-    (get-key-from-salt secret-key)
-
-    :else
-    (throw (IllegalArgumentException. "Cannot make use of secret-key"))))
-
 (defn encrypt [secret-key exp-epoch-seconds plaintext]
   (let [secret-key (get-secret-key secret-key)]
     (assert (instance? Key secret-key))
@@ -78,18 +80,6 @@
           cipher-text-bytes (.doFinal cipher (concat-byte-arrays [(encode-epoch-seconds exp-epoch-seconds) (str-bytes plaintext)]))
           cipher-bytes (concat-byte-arrays [iv-bytes cipher-text-bytes])]
       (.encodeToString (Base64/getUrlEncoder) cipher-bytes))))
-
-(defn- read-n-bytes [^InputStream bais n]
-  (with-open [baos (ByteArrayOutputStream.)]
-    (loop [i 0]
-      (let [byt (.read ^ByteArrayInputStream bais)]
-        (assert (not= -1 byt))
-        (.write baos ^int byt)
-        (if (= i (dec n))
-          (do
-            (assert (= n (alength (.toByteArray baos))))
-            (.toByteArray baos))
-          (recur (inc i)))))))
 
 (defn- split-bytes-at [byte-ar n]
   (assert (bytes? byte-ar))

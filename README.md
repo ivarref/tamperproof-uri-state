@@ -1,6 +1,6 @@
-# tamperproof-uri-state
+# encrypted-uri-state
 
-Tamperproof uri state. With expiration.
+Encrypted uri state. With expiration.
 
 Ever wanted to store some tamperproof state in a URL? Look no further.
 

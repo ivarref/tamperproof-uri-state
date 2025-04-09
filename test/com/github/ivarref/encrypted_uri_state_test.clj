@@ -150,6 +150,7 @@
   (flush))
 
 (t/deftest round-trip-happy-case
+  (t/is (= 52 (count (eus/encrypt "my-key" 1 "message"))))
   (let [enc-1 (eus/encrypt "my-key" 1 "message")
         enc-2 (eus/encrypt "my-key" 1 "message")]
     (t/is (not= enc-1 enc-2))
