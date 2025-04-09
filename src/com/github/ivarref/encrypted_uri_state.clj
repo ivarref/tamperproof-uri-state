@@ -21,21 +21,21 @@
   (println "")
   (flush))
 
+(defn- generate-iv-bytes []
+  (let [iv (byte-array 12)]
+    (.nextBytes (SecureRandom.) iv)
+    iv))
+
 (defn get-key-from-password [password salt]
   (let [secret-key-factory (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
         key-spec (PBEKeySpec. (.toCharArray ^String password) (str-bytes salt) 65536 256)
         secret-key (SecretKeySpec. (.getEncoded (.generateSecret secret-key-factory key-spec)) "AES")]
     secret-key))
 
-
-(defn- generate-iv-bytes []
-  (let [iv (byte-array 12)]
-    (.nextBytes (SecureRandom.) iv)
-    iv))
-
 (def cipher-type "AES/GCM/Nopadding")
 
 (defn- concat-byte-arrays [vec-of-arrays]
+  (assert (vector? vec-of-arrays))
   (with-open [baos (ByteArrayOutputStream.)]
     (doseq [ar vec-of-arrays]
       (assert (bytes? ar))
@@ -55,7 +55,7 @@
   (cond (and (vector? secret-key)
              (= 2 (count secret-key)))
     (get-key-from-password (first secret-key) (second secret-key))
-    (instance? Key secret-key)
+    (instance? SecretKeySpec secret-key)
     secret-key
 
     :else
@@ -75,7 +75,7 @@
           cipher-bytes (concat-byte-arrays [iv-bytes cipher-text-bytes])]
       (.encodeToString (Base64/getUrlEncoder) cipher-bytes))))
 
-(defn read-n-bytes [^InputStream bais n]
+(defn- read-n-bytes [^InputStream bais n]
   (with-open [baos (ByteArrayOutputStream.)]
     (loop [i 0]
      (let [byt (.read ^ByteArrayInputStream bais)]
@@ -87,7 +87,7 @@
            (.toByteArray baos))
          (recur (inc i)))))))
 
-(defn split-bytes-at [byte-ar n]
+(defn- split-bytes-at [byte-ar n]
   (assert (bytes? byte-ar))
   (assert (pos-int? n))
   (with-open [left (ByteArrayOutputStream.)
@@ -98,7 +98,7 @@
         (.write left ^int (aget #^bytes byte-ar i))))
     [(.toByteArray left) (.toByteArray right)]))
 
-(defn skip-n-bytes [byte-ar n]
+(defn- skip-n-bytes [byte-ar n]
   (assert (bytes? byte-ar))
   (assert (pos-int? n))
   (with-open [baos (ByteArrayOutputStream.)]
@@ -107,7 +107,7 @@
         (.write baos ^int (aget #^bytes byte-ar i))))
     (.toByteArray baos)))
 
-(defn max-n-bytes [byte-ar n]
+(defn- max-n-bytes [byte-ar n]
   (assert (bytes? byte-ar))
   (assert (pos-int? n))
   (with-open [baos (ByteArrayOutputStream.)]
@@ -140,15 +140,26 @@
     (assert (pos-int? exp-len))
     (String. #^bytes (skip-n-bytes decrypted-bytes (+ exp-len 1)) StandardCharsets/UTF_8)))
 
-(defn- decrypt-to-bytes [secret-key now-epoch-seconds encrypted-str-b64]
-  (assert (instance? SecretKeySpec (get-secret-key secret-key)))
+(defn- decrypt-to-vec [secret-key encrypted-str-b64]
   (assert (string? encrypted-str-b64))
-  (let [encrypted-bytes (.decode (Base64/getUrlDecoder) ^String encrypted-str-b64)
-        cipher (Cipher/getInstance cipher-type)
-        [iv-bytes encrypted-bytes-without-iv] (split-bytes-at encrypted-bytes 12)
-        _ (.init cipher Cipher/DECRYPT_MODE ^Key secret-key (GCMParameterSpec. 128 iv-bytes))
-        decrypted-bytes (.doFinal cipher encrypted-bytes-without-iv)]
-    decrypted-bytes))
+  (let [secret-key (get-secret-key secret-key)]
+    (let [encrypted-bytes (.decode (Base64/getUrlDecoder) ^String encrypted-str-b64)
+          cipher (Cipher/getInstance cipher-type)
+          [iv-bytes encrypted-bytes-without-iv] (split-bytes-at encrypted-bytes 12)
+          _ (.init cipher Cipher/DECRYPT_MODE ^Key secret-key (GCMParameterSpec. 128 iv-bytes))
+          decrypted-bytes (.doFinal cipher encrypted-bytes-without-iv)]
+      [(decrypted-bytes->exp decrypted-bytes)
+       (decrypted-bytes->state decrypted-bytes)])))
+
+(defn decrypt-to-map [secret-key epoch-seconds-now encrypted-str-b64]
+  (assert (string? encrypted-str-b64))
+  (assert (number? epoch-seconds-now))
+  (let [epoch-seconds-now (long epoch-seconds-now)
+        [expiry state] (decrypt-to-vec secret-key encrypted-str-b64)
+        expired? (> epoch-seconds-now expiry)]
+    (if expired?
+      {:expired? true :state nil}
+      {:expired? false :state state})))
 
 #_(try
     (do

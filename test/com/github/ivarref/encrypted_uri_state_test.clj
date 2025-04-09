@@ -1,6 +1,12 @@
 (ns com.github.ivarref.encrypted-uri-state-test
-  (:require [clojure.test :as t]
-            [com.github.ivarref.encrypted-uri-state :as eus]))
+  (:require [clj-commons.pretty.repl :as pretty]
+            [clojure.test :as t]
+            [com.github.ivarref.encrypted-uri-state :as eus]
+            [theme :as theme]))
+
+(pretty/install-pretty-exceptions)
+
+(theme/banner! "Running tests")
 
 (defn d [prefix x]
   (println prefix x)
@@ -36,16 +42,27 @@
 
 (def secret-key ["my-key" "my-salt"])
 
+(def decrypt-to-vec (resolve 'com.github.ivarref.encrypted-uri-state/decrypt-to-vec))
+
+(def encrypted-2 "DAsKCQgHBgUEAwIBYB_uNgCNyB-0F1c9F0lgcXffanWSfU7EvEEOqIPgNdlCDicJpj4bxuGHqfqcMY0=")
+
 (t/deftest basics
   (with-redefs [eus/generate-iv-bytes generate-iv-bytes-mock]
     (t/is (= "AQIDBAUGBwgJCgsMM2RxoI-hI7WTG0K8eHlrmiHhXT_67UhoYuLJWrjkc20Aen98kBg5hzQXttnFNoI="
              (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))))
-
   (with-redefs [eus/generate-iv-bytes generate-iv-bytes-mock-2]
-    (t/is (= "DAsKCQgHBgUEAwIBYB_uNgCNyB-0F1c9F0lgcXffanWSfU7EvEEOqIPgNdlCDicJpj4bxuGHqfqcMY0="
+    (t/is (= encrypted-2
              (eus/encrypt secret-key 1 "my-super-duper-great-message\n"))))
-
-  (eus/decrypt-to-bytes secret-key 0 "DAsKCQgHBgUEAwIBYB_uNgCNyB-0F1c9F0lgcXffanWSfU7EvEEOqIPgNdlCDicJpj4bxuGHqfqcMY0="))
+  (t/is (= [1 "my-super-duper-great-message\n"]
+          (decrypt-to-vec secret-key encrypted-2)))
+  (t/is (= {:expired? false
+            :state "my-super-duper-great-message\n"}
+           (eus/decrypt-to-map secret-key 1 encrypted-2)))
+  (t/is (= true
+           (:expired? (eus/decrypt-to-map secret-key 2 encrypted-2))))
+  (t/is (= {:expired? true
+            :state nil}
+           (eus/decrypt-to-map secret-key 2 encrypted-2))))
 #_(t/deftest unsign-to-map-test
     (let [state "my-super-duper-great-message\n"
           signed (tus/sign "my-key" 1 state)]
