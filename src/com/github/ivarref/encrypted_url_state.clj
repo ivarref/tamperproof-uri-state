@@ -5,7 +5,7 @@
 
 (declare encrypt-to-bytes)
 
-(def ^:dynamic ^:private -*current-epoch*
+(def ^:dynamic ^:private -*current-epoch-time*
   (fn []
     (long (/ (System/currentTimeMillis)
              1000))))
@@ -14,7 +14,7 @@
   ([secret-key state]
    (when (not (string? secret-key))
      (throw (IllegalArgumentException. "secret-key must be a string")))
-   (encrypt secret-key (+ (-*current-epoch*) 3600) state))
+   (encrypt secret-key (+ (-*current-epoch-time*) 3600) state))
   ([secret-key exp-epoch-seconds state]
    (.encodeToString (Base64/getUrlEncoder) (encrypt-to-bytes secret-key exp-epoch-seconds state))))
 
@@ -31,7 +31,7 @@
     (throw (IllegalArgumentException. "secret-key must be a string")))
    (when (not (or (bytes? encrypted-str-b64-url) (string? encrypted-str-b64-url)))
      (throw (IllegalArgumentException. "encrypted-str-b64-url must be a string or bytes")))
-   (decrypt-to-map secret-key (-*current-epoch*) encrypted-str-b64-url))
+   (decrypt-to-map secret-key (-*current-epoch-time*) encrypted-str-b64-url))
   ([secret-key epoch-seconds-now encrypted-str-b64-url]
    (when (not (string? secret-key))
      (throw (IllegalArgumentException. "secret-key must be a string")))

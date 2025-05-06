@@ -68,8 +68,8 @@
     (t/is (= {:expired? false, :data "message", :error? false, :error-message nil}
              (eus/decrypt-to-map "my-key" enc-2)))
     (t/is (= {:expired? true, :data nil, :error? true, :error-message "Expired"}
-             (binding [eus/-*current-epoch* (fn []
-                                              (+ 3601
-                                                 (long (/ (System/currentTimeMillis)
-                                                          1000))))]
+             (binding [eus/-*current-epoch-time* (fn []
+                                                   (+ 3601
+                                                      (long (/ (System/currentTimeMillis)
+                                                               1000))))]
                (eus/decrypt-to-map "my-key" enc-2))))))
