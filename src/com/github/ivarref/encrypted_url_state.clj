@@ -45,7 +45,7 @@
                                                 encrypted-str-b64-url)
                                               {:password [:cached secret-key]})]
                            (catch Exception e
-                             [true (or (ex-message e) "empty error message")]))]
+                             [true (or (ex-message e) "Empty error message")]))]
      (if (true? error)
        {:expired? false :data nil :error? true :error-message payload}
        (do
