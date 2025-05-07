@@ -1,14 +1,12 @@
-# encrypted-uri-state
+# encrypted-url-state
 
-Encrypted uri state. With expiration.
+Encrypted url state. With expiration.
 
-Ever wanted to store some tamperproof state in a URL? Look no further.
-
-Zero external dependencies (besides the JVM).
+Ever wanted to store some encrypted state in a URL? Look no further.
 
 ## Rationale
 
-Your service sends an end user to an external service for a short task.
+Your service sends an end user to an external service for a task.
 The external service supports custom callback URLs / URL parameters.
 
 Your service does not want to
@@ -19,7 +17,7 @@ As the state is kept by the external service, a restart to your service will
 not delete the state.
 
 When your service is visited with the callback URL, it can verify that the callback
-state is signed by your service and then use the state to resume doing whatever it
+state originated from your service and then use the state to resume doing whatever it
 needs to do.
 
 For example in a signing process:
@@ -40,60 +38,51 @@ sequenceDiagram
 ## Installation
 
 ```
-com.github.ivarref/tamperproof-uri-state {:git/sha "448b84a5d8ae79055b385d08ad568a4f55435b47"}
+com.github.ivarref/encrypted-url-state {:git/sha "..."}
 ```
 
 ## Usage
 
 ```clojure
-(require '[com.github.ivarref.tamperproof-uri-state :as tus])
+(require '[com.github.ivarref.encrypted-url-state :as eus])
 
-(tus/sign "my-key" (tus/plus-now 3600) "my-state")
-; Valid for one hour (3600 seconds): (+ 3600 (/ (System/currentTimeMillis) 1000))
-=> "bXktc3RhdGU=.Z_KAig==.s6VGTnzNyzStOoJpGxtuDVvNwqh6HDfrWId3adn6Q98="
+; Encrypt:
+(eus/encrypt "my-key" "my-state") ; Default expiry: 3600 seconds (1 hour) from now
+=> "TlBZDrDCzqg7goKQvpijViGM2_jEZEJqFk1Gcqibt5W64UzQLfYvbLnATi8TqUYuwg=="
 
-(tus/unsign "my-key" (tus/now) "bXktc3RhdGU=.Z_KAig==.s6VGTnzNyzStOoJpGxtuDVvNwqh6HDfrWId3adn6Q98=")
-=> "my-state"
-; returns `nil` if expired
-; returns `nil` if incorrect signature
-```
+; Explicit expiry given as epoch time in seconds: 24 hours from now
+(eus/encrypt "my-key" (eus/curr-epoch-time-plus-seconds (* 24 3600)) "my-state")
+=> "TlBZDtz_UPYPEal6qmk-ACMUogigcP01wMZc_UWdg60fN6YHdmkrhfM9m7FH3wVlEw=="
 
-Arguments for `sign` function:
 
-* The first argument should be the actual private key (_not_ a file). It must be either a `string` or a `byte array`. If your key is in a file, you will have to slurp it yourself.
-* The second argument is the expiry time in epoch seconds. Use `(tus/plus-now some-number)` to set an expiry `some-number` of seconds in the future.
-* The third argument is the state to save. It must be a string.
+; Decrypt:
+(eus/decrypt "my-key" *1) ; Default epoch time: (long (/ (System/currentTimeMillis) 1000))
+=> {:expired? false, :state "my-state", :error? false, :error-message nil}
 
-`sign` will return a URI encoded string that contains the state, the expiry time and a signature.
-This can be used in for example in a callback URL where you do not want to store temporary state in your service.
-The tamperproof state URI will survive a service restart as long as the private key is the same.
-As the return value is URI encoded, you do not need to further encode if including it in e.g. a callback URL.
+; Explicit epoch time:
+(eus/decrypt "my-key" 1746604368 "TlBZDtz_UPYPEal6qmk-ACMUogigcP01wMZc_UWdg60fN6YHdmkrhfM9m7FH3wVlEw==") 
+=> {:expired? false, :state "my-state", :error? false, :error-message nil}
 
-Arguments for `unsign` function:
+; :error? will be true if a tamper attempt was detected or the message was expired:
+(eus/decrypt "my-key" (eus/encrypt "attacker-key" "my-state"))
+=> {:expired? false, :state nil, :error? true, :error-message "Thaw failed. Possible decryption/decompression error, unfrozen/damaged data, etc."}
 
-* The first argument should be a private key. It must be either a `string` or a `byte array`. If your key is in a file, you will have to slurp it yourself.
-* The second argument is the current time in epoch seconds. Use `(tus/now)` to use the current time. This parameter can also be left out. It will then default to the current time. 
-* The third argument is the URI encoded string that was returned by `sign`. It must be a string.
+; :expired? will be true if the message expired:
+(eus/decrypt "my-key" (eus/encrypt "my-key" (eus/curr-epoch-time-plus-seconds -10) "my-state"))
+=> {:expired? true, :state nil, :error? false, :error-message "Expired"}
 
-`unsign` will return the state string if and only if the signature was correct and it was not expired. Otherwise, it will return `nil`.
 
-## "Advanced" usage
+; Full typical usage:
+(let [input (eus/encrypt "my-key" "my-state")
+      {:keys [error? expired? state]} (eus/decrypt "my-key" input)]
+  (cond error?
+        :call-the-cops ; state will be nil
 
-```clojure
-(require '[com.github.ivarref.tamperproof-uri-state :as tus])
-
-(def state-with-hash (tus/sign "my-key" (tus/plus-now 3600) "my-state"))
-
-(let [{:keys [tampered? expired? state]} (tus/unsign-to-map "my-key" (tus/now) state-with-hash)]
-  (cond tampered?
-        (log/error "Call the cops ...") ; state will be nil
-        
         expired?
-        (log/warn "Slow user alert ...") ; state will be nil
-        
-        state
-        (do
-          (log/info "Do some work"))))
+        :slow-user-alert ; state will be nil
+
+        :else
+        :do-work!))
 ```
 
 ### Details

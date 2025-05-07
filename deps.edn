@@ -8,4 +8,6 @@
                                  org.clj-commons/pretty               {:mvn/version "3.3.2"}}
                    :main-opts   ["-m" "cognitect.test-runner"]
                    :exec-fn     cognitect.test-runner.api/test
-                   :jvm-opts    ["-Dclj-commons.ansi.enabled=true"]}}}
+                   :jvm-opts    ["-Dclj-commons.ansi.enabled=true"]}
+           :repl  {:extra-deps {com.bhauman/rebel-readline {:mvn/version "0.1.5"}}
+                   :main-opts  ["-m" "rebel-readline.main"]}}}
