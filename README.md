@@ -87,30 +87,33 @@ com.github.ivarref/encrypted-url-state {:git/sha "..."}
 
 ### Details
 
-`sign` and `unsign` use `HmacSHA256` for generating a signature/hash.
-This, combined with the custom encoding, yields a smaller amount of bytes than using a regular JWT would.
-An external system/user can view the contents of the state, but cannot verify its authenticity.
-There is not public key here. This means that the recipient of the signed/hashed state should be the same service
-or another service with an identical private key.
+`encrypt` and `decrypt` use high-strength AES128, courtesy of [nippy](https://github.com/taoensso/nippy/)*.
+This yields a smaller amount of bytes than using a regular JWT would. An external user cannot view
+the contents of the state as the message is encrypted.
+There is not any public key here. This means that the recipient of the encrypted state should be the same service
+or another service with an identical private key/password.
 
+### Thanks
+
+* #clojure-norway on [Clojurians](https://clojurians.slack.com).
+* \*[Peter Taoussanis](https://www.taoensso.com/) for nippy.
+* \*[Magnar Sveen](https://magnars.com/) and [confair](https://github.com/magnars/confair).
 
 ### IFAQ.
 
-> Did you just "roll your own crypto"?
+> Is it worth making a library consisting of only 60 lines of code?
 
-No, I rolled my own "Java standard library interop in Clojure".
+Who knows.
 
-> Why?
+> Why did you make it?
 
-It was the least worst (aka best) I could think of.
+I went down a deep Java Standard Library signing/crypto rabbit hole, 
+got feedback from #clojure-norway, felt the pain of the sunk cost fallacy,
+deleted most of the code and ultimately just wrapped [nippy](https://github.com/taoensso/nippy/).
 
 > IFAQ?
 
 That is InFrequently Asked Questions.
-
-## Further reading
-
-[HMAC in Java](https://www.baeldung.com/java-hmac).
 
 ## License
 

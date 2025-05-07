@@ -1,6 +1,6 @@
 {:paths   ["src"]
  :deps    {org.clojure/clojure {:mvn/version "1.11.1"}
-           com.taoensso/nippy  {:mvn/version "3.4.2"}}
+           com.taoensso/nippy  {:mvn/version "3.5.0"}}
  :aliases {:build {:deps       {com.github.liquidz/build.edn {:mvn/version "0.11.241"}}
                    :ns-default build-edn.main}
            :test  {:extra-paths ["test"]
