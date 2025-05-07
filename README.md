@@ -99,7 +99,7 @@ or another service with an identical private key/password.
 * \*[Peter Taoussanis](https://www.taoensso.com/) for nippy.
 * \*[Magnar Sveen](https://magnars.com/) and [confair](https://github.com/magnars/confair).
 
-### IFAQ.
+### IFAQ
 
 > Is it worth making a library consisting of only 60 lines of code?
 
