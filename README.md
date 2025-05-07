@@ -63,11 +63,11 @@ com.github.ivarref/encrypted-url-state {:git/sha "..."}
 (eus/decrypt "my-key" 1746604368 "TlBZDtz_UPYPEal6qmk-ACMUogigcP01wMZc_UWdg60fN6YHdmkrhfM9m7FH3wVlEw==") 
 => {:expired? false, :state "my-state", :error? false, :error-message nil}
 
-; :error? will be true if a tamper attempt was detected or the message was expired:
+; :error? will be true if a tamper attempt was detected:
 (eus/decrypt "my-key" (eus/encrypt "attacker-key" "my-state"))
 => {:expired? false, :state nil, :error? true, :error-message "Thaw failed. Possible decryption/decompression error, unfrozen/damaged data, etc."}
 
-; :expired? will be true if the message expired:
+; :expired? will be true if the message was expired:
 (eus/decrypt "my-key" (eus/encrypt "my-key" (eus/curr-epoch-time-plus-seconds -10) "my-state"))
 => {:expired? true, :state nil, :error? false, :error-message "Expired"}
 
